@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-title" content="Расписание">
+<style>:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }</style>
+<title>Расписание Марка</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap">
+<style>
+/* Layout: one phone-first column — "now" card on top, week + filter controls, sticky day chips, seven day cards like a printed timetable with a highlighter on the current pair */
+:root {
+  --paper: #f1f3f8;
+  --card: #ffffff;
+  --ink: #131a2c;
+  --muted: #5b6377;
+  --line: #dce1ea;
+  --soft: #eceff5;
+  --hl: #fff09a;
+  --hl-ink: #5f4a00;
+  --gym: #ad6400;
+  --eng: #1c5dcf;
+  --gran: #c21d2c;
+  --church: #7737bb;
+  --free: #11804a;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0d1017; --card: #161a24; --ink: #edf0f6; --muted: #9aa2b5; --line: #272d3b; --soft: #1e2330;
+    --hl: #3b3410; --hl-ink: #ffd94a;
+    --gym: #f3a43c; --eng: #6da8ff; --gran: #ff6b78; --church: #c69cff; --free: #52d78d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0d1017; --card: #161a24; --ink: #edf0f6; --muted: #9aa2b5; --line: #272d3b; --soft: #1e2330;
+  --hl: #3b3410; --hl-ink: #ffd94a;
+  --gym: #f3a43c; --eng: #6da8ff; --gran: #ff6b78; --church: #c69cff; --free: #52d78d;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.4;
+  -webkit-text-size-adjust: 100%;
+}
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto;
+  height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--paper);
+}
+.wrap {
+  max-width: 720px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 22px 40px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+/* header */
+.top { display: flex; flex-direction: column; gap: 2px; }
+.eyebrow { font: 600 12px/1.2 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 0; font-size: 28px; line-height: 1.1; font-weight: 700; letter-spacing: -.02em; text-wrap: balance; }
+
+/* now card */
+.now {
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 12px;
+}
+.now-block { display: flex; flex-direction: column; gap: 6px; }
+.now-block + .now-block { border-top: 1px dashed var(--line); padding-top: 12px; }
+.now-label { display: flex; align-items: center; gap: 8px; font: 700 11.5px/1.2 var(--font-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); flex-wrap: wrap; }
+.now-label .live { display: inline-flex; align-items: center; gap: 6px; background: var(--hl); color: var(--hl-ink); padding: 3px 8px; border-radius: 6px; }
+.now-label .live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .now-label .live::before { animation: none; } }
+.now .rows { margin: 0; }
+.now .row { padding: 4px 0; }
+.now-empty { margin: 0; color: var(--muted); }
+
+/* controls */
+.controls { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
+.seg { display: flex; background: var(--soft); border-radius: 12px; padding: 4px; gap: 4px; flex: 1 1 220px; }
+.seg button {
+  flex: 1; border: 0; background: transparent; color: var(--muted);
+  font: 600 14px/1 var(--font-body); padding: 10px 8px; border-radius: 9px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px;
+}
+.seg button[aria-selected="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.seg .cur { font: 700 10px/1 var(--font-mono); letter-spacing: .05em; text-transform: uppercase; background: var(--hl); color: var(--hl-ink); padding: 3px 5px; border-radius: 4px; }
+.switch {
+  flex: 0 0 auto; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  font: 600 14px/1 var(--font-body); padding: 0 14px; border-radius: 12px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; min-height: 48px;
+}
+.switch .knob { width: 30px; height: 18px; border-radius: 9px; background: var(--line); position: relative; transition: background .15s; }
+.switch .knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--card); transition: transform .15s; }
+.switch[aria-pressed="true"] .knob { background: var(--ink); }
+.switch[aria-pressed="true"] .knob::after { transform: translateX(12px); }
+
+/* sticky day chips */
+.days {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--paper); padding-block: 6px;
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+}
+.days button {
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  font: 600 13px/1 var(--font-mono); padding: 10px 0; border-radius: 10px; cursor: pointer; min-height: 40px;
+}
+.days button.is-today { background: var(--ink); color: var(--card); border-color: var(--ink); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+/* day cards */
+.week { display: flex; flex-direction: column; gap: 12px; }
+.day { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px 8px; scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 64px); }
+.day.is-today { border-color: var(--ink); }
+.dh { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.dh h2 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
+.dh .date { font: 500 13px/1 var(--font-mono); color: var(--muted); }
+.dh .today { font: 700 10.5px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; background: var(--hl); color: var(--hl-ink); padding: 4px 7px; border-radius: 5px; }
+.free { margin-top: 4px; font-size: 13px; color: var(--free); font-weight: 600; }
+.free b { font: 700 10.5px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; margin-right: 4px; }
+.empty { margin: 8px 0 6px; color: var(--muted); font-size: 14px; }
+
+.rows { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; }
+.row {
+  display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 12px;
+  padding: 10px 8px; margin-inline: -8px; border-radius: 10px;
+}
+.day .row + .row { border-top: 1px solid var(--soft); }
+.row.is-now { background: var(--hl); border-top-color: transparent; }
+.row.is-now + .row { border-top-color: transparent; }
+.row.is-past { opacity: .45; }
+.time { display: flex; flex-direction: column; gap: 2px; font-variant-numeric: tabular-nums; }
+.t1 { font: 700 15px/1.15 var(--font-mono); }
+.t2 { font: 500 12.5px/1.15 var(--font-mono); color: var(--muted); }
+.pair { margin-top: 4px; font: 600 10.5px/1 var(--font-mono); color: var(--muted); letter-spacing: .03em; }
+.body { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.title { font-weight: 600; font-size: 15.5px; line-height: 1.3; overflow-wrap: anywhere; }
+.k-gym .title { color: var(--gym); }
+.k-eng .title { color: var(--eng); }
+.k-gran .title { color: var(--gran); }
+.k-church .title { color: var(--church); }
+.row.is-now .title { color: var(--ink); }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; color: var(--muted); }
+.tag { font: 700 10.5px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; padding: 4px 6px; border-radius: 5px; border: 1px solid var(--line); color: var(--ink); }
+.tag-pr { background: var(--soft); border-color: var(--soft); }
+.tag-par { color: var(--muted); border-style: dashed; }
+.links { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 2px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 36px;
+  padding: 0 13px; border-radius: 999px; text-decoration: none;
+  background: var(--ink); color: var(--card); font: 700 13px/1 var(--font-mono);
+  border: 1px solid var(--ink);
+}
+.btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn:hover { opacity: .88; }
+.note { font-size: 12.5px; color: var(--muted); font-style: italic; }
+button:focus-visible, .btn:focus-visible { outline: 2px solid var(--eng); outline-offset: 2px; }
+
+footer { font-size: 12.5px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
+footer p { margin: 0; }
+
+@media (min-width: 560px) {
+  h1 { font-size: 34px; }
+  .row { grid-template-columns: 70px minmax(0, 1fr); }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">ІА-51 · ФІОТ · КПІ</div>
+    <h1>Расписание Марка</h1>
+  </header>
+
+  <section class="now" id="now" aria-live="polite"></section>
+
+  <div class="controls">
+    <div class="seg" role="tablist" aria-label="Неделя">
+      <button id="w1" role="tab" type="button" data-week="1">1 неделя</button>
+      <button id="w2" role="tab" type="button" data-week="2">2 неделя</button>
+    </div>
+    <button id="onlyClasses" class="switch" type="button" aria-pressed="false"><span class="knob" aria-hidden="true"></span>Только пары</button>
+  </div>
+
+  <nav class="days" id="dayNav" aria-label="Дни недели"></nav>
+
+  <p class="legend" id="legend">
+    <span><i style="background: var(--ink)"></i>пары</span>
+    <span><i style="background: var(--gym)"></i>зал</span>
+    <span><i style="background: var(--eng)"></i>английский с Юлей</span>
+    <span><i style="background: var(--gran)"></i>занятия с бабушкой</span>
+    <span><i style="background: var(--church)"></i>церковь</span>
+    <span><i style="background: var(--free)"></i>свободно</span>
+  </p>
+
+  <main class="week" id="week"></main>
+
+  <footer>
+    <p>Время киевское. Текущая неделя определяется сама: неделя с 9 ноября 2026 — первая.</p>
+    <p>Кнопка Zoom открывает конференцию в приложении или в браузере.</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- links ----------
+  var L = {
+    aks: "https://us04web.zoom.us/j/75785758769?pwd=xfoWWA3brujlu6aD28gMDHw1QKW96c.1",
+    aksDrive: "https://drive.google.com/drive/folders/1XIKZXbEqC7mH0cjbIFA7FkYuOrEPIbY7?usp=sharing",
+    dbLec: "https://us02web.zoom.us/j/83718962511?pwd=SXdvWUFJYTJwTlliM3Z3QmdaU3Avdz09",
+    mathLec: "https://us02web.zoom.us/j/81694551976?pwd=gKZ3iJ5Dd6KyRaCrzZzDQYMvNtuDb8.1",
+    lawLec: "https://us05web.zoom.us/j/85300513357?pwd=MB0h29eMpfHxg9cIGQv61hryrU1vn8.1",
+    netLec: "https://us02web.zoom.us/j/7106235398?pwd=VWNvNlkyZkhoK0hFeTlUTE5qMGp3UT09",
+    ons: "https://us02web.zoom.us/j/89479377538?pwd=cQDcnkszYdpNg4uZMxia0DqJbvenqU.1",
+    boyko: "https://us02web.zoom.us/j/5725059495?pwd=SHAzL1kwTmcyYm1PdkdzNVNLNUZ6dz09",
+    gender: "https://us04web.zoom.us/j/9015524081?pwd=RYB6lDnuaA2b3vKLat2PSs0QpGaCyv.1",
+    philPr: "https://us05web.zoom.us/j/89520540395?pwd=ruafKEHavAmSrRyA13BTpkbv83hxMs.1"
+  };
+  function zoom(url, label) { return { label: label || "Zoom", url: url }; }
+  var DRIVE = { label: "Google Диск", url: L.aksDrive, ghost: true };
+  var CHANGES = "ссылка каждый раз новая";
+
+  // ---------- classes ----------
+  function cls(s, e, title, o) {
+    var x = { s: s, e: e, title: title, kind: "class" };
+    for (var k in o) x[k] = o[k];
+    return x;
+  }
+  function own(s, e, kind, title, par) { return { s: s, e: e, kind: kind, title: title, par: !!par }; }
+
+  function AKS(s, e, type, room) {
+    return cls(s, e, "Архитектура компьютерных систем", { type: type, who: "Ковальов М. О.", room: room, links: [zoom(L.aks), DRIVE] });
+  }
+  function MATH_LEC(s, e, type) { return cls(s, e, "Высшая математика", { type: type, who: "Блажієвська І. П.", links: [zoom(L.mathLec)] }); }
+  function MATH_PR() { return cls("08:30", "10:00", "Высшая математика", { type: "Практика", who: "Дрозд В. В.", note: CHANGES }); }
+  function DB_LEC(type) { return cls("10:25", "12:00", "Базы данных", { type: type, who: "Ульяницька К. О.", links: [zoom(L.dbLec)] }); }
+  function DB_PR(room) { return cls("18:05", "20:00", "Базы данных", { type: "Практика", who: "Бойко О. В.", room: room, links: [zoom(L.boyko)] }); }
+  function NET_LEC() { return cls("10:25", "12:00", "Компьютерные сети", { type: "Лекция", who: "Ролік О. І.", links: [zoom(L.netLec)] }); }
+  function NET_PR(room) { return cls("12:20", "14:00", "Компьютерные сети", { type: "Практика", who: "Бойко О. В.", room: room, links: [zoom(L.boyko)] }); }
+  function ENG(s, e, room) { return cls(s, e, "Английский язык", { type: "Практика", who: "Дорошенко Л. В.", room: room, note: CHANGES }); }
+  function ONS() { return cls("08:30", "10:00", "Основи національного спротиву", { type: "Лекция", links: [zoom(L.ons)] }); }
+  function GENDER() { return cls("10:25", "12:00", "Гендерная психология", { type: "Лекция", links: [zoom(L.gender)] }); }
+
+  var JULIA_TUE = own("08:30", "09:30", "eng", "Английский с Юлей", true);
+  var JULIA_THU = own("09:00", "10:00", "eng", "Английский с Юлей");
+  var GRAN = "Занятия с бабушкой";
+  var CHURCH = { items: [own("10:00", "16:30", "church", "Церковь")], free: ["утро до 10:00", "после 16:30"] };
+
+  var SCHEDULE = {
+    1: [
+      { items: [
+          AKS("08:30", "10:00", "Лекция"),
+          DB_LEC("Лекция"),
+          own("10:25", "12:00", "gym", "Зал — Спина (ширина) + бицепс", true),
+          MATH_LEC("12:20", "14:00", "Лекция"),
+          MATH_LEC("14:15", "16:00", "Лекция"),
+          own("14:15", "16:00", "gran", GRAN, true),
+          cls("16:10", "18:00", "АКС / Базы данных", { type: "Разовая лекция", links: [zoom(L.aks, "Zoom АКС"), zoom(L.dbLec, "Zoom БД")] })
+        ], free: ["после 16:00 (в день разовой лекции — после 18:00)"] },
+      { items: [
+          cls("08:30", "10:00", "Права і свободи людини та протидія корупції", { type: "Лекция", who: "Гречишникова В. В.", links: [zoom(L.lawLec)] }),
+          JULIA_TUE,
+          NET_LEC(),
+          own("12:30", "14:00", "gran", GRAN),
+          own("14:15", "15:30", "gym", "Зал — Грудь + плечи + трицепс + кардио")
+        ], free: ["12:00 — 12:30", "после 15:30"] },
+      { items: [
+          ONS(),
+          own("08:30", "10:00", "gym", "Зал — Ноги: акцент квадрицепс + пресс", true),
+          own("11:00", "13:00", "gran", GRAN),
+          own("15:00", "17:00", "gran", GRAN)
+        ], free: ["10:00 — 11:00", "13:00 — 15:00", "после 17:00"] },
+      { items: [
+          JULIA_THU,
+          AKS("10:25", "12:00", "Практика", "18-517"),
+          NET_PR("18-533"),
+          ENG("14:15", "16:00", "18-207"),
+          ENG("16:10", "18:00", "18-207"),
+          DB_PR("18-533")
+        ], free: ["утро до 9:00", "после 20:00"] },
+      { items: [
+          GENDER(),
+          own("12:20", "14:00", "gym", "Зал — Спина (толщина) + верх груди + плечи + руки"),
+          own("14:30", "16:30", "gran", GRAN)
+        ], free: ["утро до 10:25", "14:00 — 14:30", "после 16:30"] },
+      { items: [
+          MATH_PR(),
+          cls("10:25", "12:00", "Вступ до філософії", { type: "Практика", who: "Кравченко І. А.", links: [zoom(L.philPr)] }),
+          own("12:20", "14:00", "gym", "Зал — Ноги: акцент бицепс бедра и ягодицы + пресс"),
+          own("14:00", "14:20", "gym", "Кардио — лёгкое (дорожка в подъём / велотренажёр)"),
+          own("17:00", "18:30", "gran", GRAN)
+        ], free: ["14:20 — 17:00", "после 18:30"] },
+      CHURCH
+    ],
+    2: [
+      { items: [
+          AKS("08:30", "10:00"),
+          DB_LEC(),
+          own("10:25", "12:00", "gym", "Зал — Спина (ширина) + бицепс", true),
+          MATH_LEC("12:20", "14:00"),
+          MATH_LEC("14:15", "16:00"),
+          own("14:15", "16:00", "gran", GRAN, true),
+          AKS("16:10", "18:00")
+        ], free: ["после 18:00"] },
+      { items: [
+          cls("08:30", "10:00", "Вступ до філософії", { type: "Лекция" }),
+          JULIA_TUE,
+          NET_LEC(),
+          own("12:30", "14:00", "gran", GRAN),
+          own("14:15", "15:30", "gym", "Зал — Грудь + плечи + трицепс + кардио")
+        ], free: ["12:00 — 12:30", "после 15:30"] },
+      { items: [
+          ONS(),
+          own("08:30", "10:00", "gym", "Зал — Ноги: акцент квадрицепс + пресс", true),
+          own("11:00", "13:00", "gran", GRAN),
+          own("15:00", "16:00", "gran", GRAN)
+        ], free: ["10:00 — 11:00", "13:00 — 15:00", "после 16:00"] },
+      { items: [
+          JULIA_THU,
+          NET_PR(),
+          own("12:20", "14:00", "gym", "Зал — Спина — толщина + бицепс", true),
+          ENG("14:15", "16:00"),
+          own("16:00", "18:00", "gran", GRAN),
+          DB_PR()
+        ], free: ["утро до 9:00", "10:00 — 12:20", "после 20:00"] },
+      { items: [
+          GENDER(),
+          own("12:20", "14:00", "gym", "Зал — Спина (толщина) + верх груди + плечи + руки"),
+          own("14:30", "16:30", "gran", GRAN)
+        ], free: ["утро до 10:25", "14:00 — 14:30", "после 16:30"] },
+      { items: [
+          MATH_PR(),
+          cls("10:25", "12:00", "Права і свободи людини та протидія корупції", { type: "Практика" }),
+          own("12:20", "14:00", "gym", "Зал — Ноги: акцент бицепс бедра и ягодицы + пресс"),
+          own("14:00", "14:20", "gym", "Кардио — лёгкое (дорожка в подъём / велотренажёр)"),
+          own("17:00", "18:30", "gran", GRAN)
+        ], free: ["14:20 — 17:00", "после 18:30"] },
+      CHURCH
+    ]
+  };
+
+  // ---------- time ----------
+  var DAY = 864e5;
+  var ANCHOR = Date.UTC(2026, 10, 9); // понедельник первой недели
+  var DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
+  var DAYS_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+  var DAYS_ON = ["в понедельник", "во вторник", "в среду", "в четверг", "в пятницу", "в субботу", "в воскресенье"];
+  var MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+  var PAIR = { "08:30": 1, "10:25": 2, "12:20": 3, "14:15": 4, "16:10": 5, "18:05": 6 };
+
+  var fmt;
+  try {
+    fmt = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Kyiv", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  } catch (e) {
+    fmt = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Kiev", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  }
+  function weekOf(mondayUTC) {
+    var diff = Math.round((mondayUTC - ANCHOR) / (7 * DAY));
+    return ((diff % 2) + 2) % 2 === 0 ? 1 : 2;
+  }
+  function kyivNow() {
+    var p = {};
+    fmt.formatToParts(new Date()).forEach(function (x) { p[x.type] = x.value; });
+    var dayUTC = Date.UTC(+p.year, +p.month - 1, +p.day);
+    var dow = (new Date(dayUTC).getUTCDay() + 6) % 7;
+    var monday = dayUTC - dow * DAY;
+    return { dayUTC: dayUTC, dow: dow, mins: (+p.hour % 24) * 60 + (+p.minute), monday: monday, week: weekOf(monday) };
+  }
+  function toMin(t) { return +t.slice(0, 2) * 60 + +t.slice(3); }
+  function dateLabel(utc) { var d = new Date(utc); return d.getUTCDate() + " " + MONTHS[d.getUTCMonth()]; }
+
+  // ---------- state ----------
+  var onlyClasses = false;
+  try { onlyClasses = localStorage.getItem("onlyClasses") === "1"; } catch (e) {}
+  var view = kyivNow().week;
+
+  function items(week, dow) {
+    return SCHEDULE[week][dow].items.filter(function (e) { return !onlyClasses || e.kind === "class"; });
+  }
+
+  // ---------- render ----------
+  function rowHTML(e, extra) {
+    var pair = e.kind === "class" && PAIR[e.s] ? '<span class="pair">' + PAIR[e.s] + " пара</span>" : "";
+    var tags = "";
+    if (e.type) tags += '<span class="tag' + (e.type === "Практика" ? " tag-pr" : "") + '">' + e.type + "</span>";
+    if (e.par) tags += '<span class="tag tag-par">параллельно</span>';
+    var meta = [e.who, e.room ? "ауд. " + e.room : ""].filter(Boolean).join(" · ");
+    var links = (e.links || []).map(function (l) {
+      return '<a class="btn' + (l.ghost ? " btn-ghost" : "") + '" href="' + l.url + '" target="_blank" rel="noopener noreferrer">' + l.label + ' <span aria-hidden="true">↗</span></a>';
+    }).join("");
+    var note = e.note ? '<span class="note">' + e.note + "</span>" : "";
+    return '<li class="row k-' + e.kind + (extra ? " " + extra : "") + '">' +
+      '<div class="time"><span class="t1">' + e.s + '</span><span class="t2">' + e.e + "</span>" + pair + "</div>" +
+      '<div class="body"><div class="title">' + e.title + "</div>" +
+      (tags || meta ? '<div class="meta">' + tags + (meta ? "<span>" + meta + "</span>" : "") + "</div>" : "") +
+      (links || note ? '<div class="links">' + links + note + "</div>" : "") +
+      "</div></li>";
+  }
+
+  function untilLabel(mins) {
+    if (mins < 60) return "через " + mins + " мин";
+    var h = Math.floor(mins / 60), m = mins % 60;
+    return "через " + h + " ч" + (m ? " " + m + " мин" : "");
+  }
+
+  function renderNow(n) {
+    var today = items(n.week, n.dow);
+    var cur = today.filter(function (e) { return toMin(e.s) <= n.mins && n.mins < toMin(e.e); });
+    var next = null;
+    for (var off = 0; off < 14 && !next; off++) {
+      var dayUTC = n.dayUTC + off * DAY;
+      var dow = (n.dow + off) % 7;
+      var wk = weekOf(dayUTC - dow * DAY);
+      var evs = items(wk, dow).filter(function (e) { return off > 0 || toMin(e.s) > n.mins; });
+      if (evs.length) {
+        var first = Math.min.apply(null, evs.map(function (e) { return toMin(e.s); }));
+        next = { off: off, dow: dow, start: first, list: evs.filter(function (e) { return toMin(e.s) === first; }) };
+      }
+    }
+    var html = "";
+    if (cur.length) {
+      html += '<div class="now-block"><div class="now-label"><span class="live">Сейчас</span></div><ol class="rows">' +
+        cur.map(function (e) { return rowHTML(e); }).join("") + "</ol></div>";
+    }
+    if (next) {
+      var hhmm = next.list[0].s;
+      var when = next.off === 0 ? "сегодня в " + hhmm + " · " + untilLabel(next.start - n.mins)
+        : next.off === 1 ? "завтра в " + hhmm
+        : DAYS_ON[next.dow] + " в " + hhmm;
+      html += '<div class="now-block"><div class="now-label">Дальше · ' + when + '</div><ol class="rows">' +
+        next.list.map(function (e) { return rowHTML(e); }).join("") + "</ol></div>";
+    }
+    if (!html) html = '<p class="now-empty">В ближайшие две недели ничего не запланировано.</p>';
+    document.getElementById("now").innerHTML = html;
+  }
+
+  function renderControls(n) {
+    [1, 2].forEach(function (w) {
+      var b = document.getElementById("w" + w);
+      b.setAttribute("aria-selected", String(view === w));
+      b.innerHTML = w + " неделя" + (n.week === w ? ' <span class="cur">сейчас</span>' : "");
+    });
+    var sw = document.getElementById("onlyClasses");
+    sw.setAttribute("aria-pressed", String(onlyClasses));
+    document.getElementById("legend").hidden = onlyClasses;
+    document.getElementById("dayNav").innerHTML = DAYS_SHORT.map(function (d, i) {
+      var today = view === n.week && i === n.dow;
+      return '<button type="button" data-day="' + i + '"' + (today ? ' class="is-today" aria-current="date"' : "") + ">" + d + "</button>";
+    }).join("");
+  }
+
+  function renderWeek(n) {
+    var monday = view === n.week ? n.monday : n.monday + 7 * DAY;
+    document.getElementById("week").innerHTML = DAYS.map(function (name, i) {
+      var list = items(view, i);
+      var isToday = view === n.week && i === n.dow;
+      var rows = list.map(function (e) {
+        var c = "";
+        if (isToday) {
+          if (n.mins >= toMin(e.e)) c = "is-past";
+          else if (n.mins >= toMin(e.s)) c = "is-now";
+        }
+        return rowHTML(e, c);
+      }).join("");
+      var d = SCHEDULE[view][i];
+      var free = !onlyClasses && d.free ? '<div class="free"><b>Свободно</b> ' + d.free.join(" · ") + "</div>" : "";
+      return '<section class="day' + (isToday ? " is-today" : "") + '" id="d' + i + '">' +
+        '<header class="dh"><h2>' + name + '</h2><span class="date">' + dateLabel(monday + i * DAY) + "</span>" +
+        (isToday ? '<span class="today">сегодня</span>' : "") + "</header>" + free +
+        (rows ? '<ol class="rows">' + rows + "</ol>" : '<p class="empty">Пар нет</p>') + "</section>";
+    }).join("");
+  }
+
+  var lastKey = "";
+  function render(force) {
+    var n = kyivNow();
+    var key = n.dayUTC + ":" + n.mins + ":" + view + ":" + onlyClasses;
+    if (!force && key === lastKey) return;
+    lastKey = key;
+    renderNow(n);
+    renderControls(n);
+    renderWeek(n);
+  }
+
+  // ---------- events ----------
+  document.querySelector(".seg").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-week]");
+    if (!b) return;
+    view = +b.getAttribute("data-week");
+    render(true);
+  });
+  document.getElementById("onlyClasses").addEventListener("click", function () {
+    onlyClasses = !onlyClasses;
+    try { localStorage.setItem("onlyClasses", onlyClasses ? "1" : "0"); } catch (e) {}
+    render(true);
+  });
+  document.getElementById("dayNav").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-day]");
+    if (!b) return;
+    var el = document.getElementById("d" + b.getAttribute("data-day"));
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (el) el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  });
+
+  render(true);
+  setInterval(function () { render(false); }, 20000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) render(false); });
+})();
+</script>
+</body>
+</html>
